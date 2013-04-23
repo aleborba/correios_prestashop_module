@@ -27,15 +27,15 @@ class CorreiosCarrier extends CarrierModule
 	{
 		global $cookie;
 
-		$this->name = 'correios';
+		$this->name = 'correioscarrier';
 		$this->tab = 'shipping_logistics';
-		$this->version = '1.07';
-		$this->author = 'Petto Martino';
+		$this->version = '0.1.0';
+		$this->author = 'Ale Borba';
 
 		parent::__construct ();
 
 		$this->displayName = $this->l('Frete Correios');
-		$this->description = $this->l('Calculo de frete realizado pelos correios');
+		$this->description = $this->l('Calculo de frete realizado pelos correios (Baseado nos módulo de Pedro Martino e Fabrice Menoyot');
 
 		if (self::isInstalled($this->name))
 		{
