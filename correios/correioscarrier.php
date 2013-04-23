@@ -86,8 +86,8 @@ class CorreiosCarrier extends CarrierModule
 		global $cookie;
 
 		// Install SQL
-		include(dirname(__FILE__).'/config.php');
-		include(dirname(__FILE__).'/sql-install.php');
+		include(dirname(__FILE__).'/install/config.php');
+		include(dirname(__FILE__).'/install/sql-install.php');
 		
 		foreach ($sql as $s) {
 			
@@ -107,7 +107,7 @@ class CorreiosCarrier extends CarrierModule
 		// Cleaning procedures to ensure superb installation!
 		//=========================================================
 		if (_CLEAN_SQL_BEFORE_INSTALLATION) {
-			include(dirname(__FILE__).'/sql-install-clean-sql.php');
+			include(dirname(__FILE__).'/install/sql-install-clean-sql.php');
 			foreach ($sql2 as $s2)
 				if (!Db::getInstance()->Execute($s2))
 					return false;
@@ -143,7 +143,7 @@ class CorreiosCarrier extends CarrierModule
 				return false;
 
 		// Uninstall SQL
-		include(dirname(__FILE__).'/sql-uninstall.php');
+		include(dirname(__FILE__).'/install/sql-uninstall.php');
 		foreach ($sql as $s)
 			if (!Db::getInstance()->Execute($s))
 				return false;
