@@ -35,7 +35,7 @@ class CorreiosCarrier extends CarrierModule
 		parent::__construct ();
 
 		$this->displayName = $this->l('Frete Correios');
-		$this->description = $this->l('Calculo de frete realizado pelos correios (Baseado nos módulo de Pedro Martino e Fabrice Menoyot');
+		$this->description = $this->l('Calculo de frete realizado pelos correios (Baseado nos modulo de Pedro Martino e Fabrice Menoyot)');
 
 		if (self::isInstalled($this->name))
 		{
