@@ -682,7 +682,7 @@ public function getOrderShippingCost($params, $shipping_cost)
 
 		// Check cache
 		// Disabled when Sem Frete installed
-		include(dirname(__FILE__).'/config.php');
+		include(dirname(__FILE__) . '/install/config.php');
 		if (_USE_CACHE_CORREIOS) {
 				$cache = $this->getOrderShippingCostCache($wsParams);
 				if ($cache['id_correios_cache'] > 0)
