@@ -29,8 +29,9 @@ class CorreiosCarrier extends CarrierModule
 
 		$this->name = 'correioscarrier';
 		$this->tab = 'shipping_logistics';
-		$this->version = '0.1.0';
+		$this->version = '0.1.1';
 		$this->author = 'Ale Borba';
+		$this->limited_countries = array('br');
 
 		parent::__construct ();
 
@@ -161,7 +162,7 @@ class CorreiosCarrier extends CarrierModule
 		Db::getInstance()->autoExecute(_DB_PREFIX_.'correios_rate_service_code', array('active' => 0), 'UPDATE');
 
 		// Get all services availables
-		$rateServiceList = Db::getInstance()->ExecuteS('SELECT * FROM `'._DB_PREFIX_.'correios_rate_service_code');
+		$rateServiceList = Db::getInstance()->ExecuteS('SELECT * FROM `'._DB_PREFIX_.'correios_rate_service_code`');
 		foreach ($rateServiceList as $rateService)
 			if (!$rateService['id_carrier'])
 			{
@@ -632,12 +633,12 @@ class CorreiosCarrier extends CarrierModule
 		if ($wsParams['nCdServico'] == "99999") {
 			return $cost . "|" . $TotalWeight;
 		} else {
-
 			$result = $this->getCorreiosShippingCost($wsParams);
-			if ($result['connect'] && $result['cost'] > 0)
+			if ($result['connect'] && $result['cost'] > 0){
 				// We return the cost and the total wieght as we need the total weight in the following function!
 				$thisCost = ($cost + $result['cost']);
 				return $thisCost . "|" . $TotalWeight;
+			}
 			return false;
 		}	
 	}
@@ -661,7 +662,7 @@ public function getOrderShippingCost($params, $shipping_cost)
 			'nCdEmpresa' => '',
 			'sDsSenha' => '',
 			'sCepOrigem' => Configuration::get('CORREIOS_CARRIER_POSTAL_CODE'),
-			'sCepDestino' => $address->postcode ?: $context->cookie->postcode,
+			'sCepDestino' => !empty($address->postcode) ? $address->postcode : $context->cookie->postcode,
 			'nVlPeso'  => cart::GetTotalWeight(),
 			'nCdFormato' => '1',
 			'nVlComprimento' => '25',
@@ -698,6 +699,9 @@ public function getOrderShippingCost($params, $shipping_cost)
 		// Get Webservices Cost and Cache it
 		// Return cost and total weight
 		$myResult = $this->getWebserviceShippingCost($wsParams);
+
+		if(  !is_string($myResult) && $myResult == FALSE)
+			return false;
 
 		$myresultSplit = explode("|",$myResult);
 		$wscost = (float)$myresultSplit[0];
@@ -754,8 +758,8 @@ public function getOrderShippingCost($params, $shipping_cost)
 	public function parseXML($valTab)
 	{
 		$resultTab = array(
-		  'Valor' => str_replace(',','.',$valTab->cServico->Valor),
-		  'Erro' => $valTab->cServico->Erro,
+		  	'Valor' => str_replace(',','.',$valTab->cServico->Valor),
+		  	'Erro' => $valTab->cServico->Erro,
 			'MsgErro' => $valTab->cServico->MsgErro,
 			'PrazoEntrega' => $valTab->cServico->PrazoEntrega
 		);
@@ -804,32 +808,49 @@ public function getOrderShippingCost($params, $shipping_cost)
 		if (!empty($service))
 			$servicesList = array(array('code' => $service));
 		else
-			$servicesList = Db::getInstance()->ExecuteS('SELECT `code` FROM `'._DB_PREFIX_.'correios_rate_service_code');	
+			$servicesList = Db::getInstance()->ExecuteS('SELECT `code` FROM `'._DB_PREFIX_.'correios_rate_service_code`');
 
 		// Testing Service
-		foreach ($servicesList as $service)
-		{
-			// Sending Request
-			$wsParams['service'] = $service['code'];
-			$resultTab = Db::getInstance()->getValue('SELECT `result` FROM `'._DB_PREFIX_.'correios_cache_test` WHERE `hash` = \''.pSQL(md5($this->getURL($wsParams))).'\'');
-			if ($resultTab)
-				$resultTab = json_decode($resultTab, True);
-			else
-				$resultTab = $this->sendRequest($wsParams);
-			// Return results
-			if (isset($resultTab['Erro']))
+		if(!empty($servicesList)) {
+			foreach ($servicesList as $service)
 			{
-				Db::getInstance()->autoExecute(_DB_PREFIX_.'correios_cache_test', array('hash' => pSQL(md5($this->getURL($wsParams))), 'result' => pSQL(json_encode($resultTab)), 'date_add' => pSQL(date('Y-m-d H:i:s')), 'date_upd' => pSQL(date('Y-m-d H:i:s'))), 'INSERT');
-				return true;
-			}
+				// Sending Request
+				$wsParams['service'] = $service['code'];
 
-			if (isset($resultTab['MsgErro']))
-				$this->_webserviceError = $this->l('Error').' '.$resultTab['Erro'].' : '.$resultTab['MsgErro'];
-			else
-			{ 
-				$this->_webserviceError = $this->l('Correios Webservice seems to be down, please wait a few minutes and try again');
-				return false;
+				if(_USE_CACHE_CORREIOS) {
+					$resultTab = Db::getInstance()->getValue('SELECT `result` FROM `'._DB_PREFIX_.'correios_cache_test` WHERE `hash` = \''.pSQL(md5($this->getURL($wsParams))).'\'');
+					if ($resultTab)
+						$resultTab = json_decode($resultTab, True);
+					else {
+						$resultTab = $this->sendRequest($wsParams);
+					}
+				} else {
+					$resultTab = $this->sendRequest($wsParams);
+				}
+
+				//correct json to database
+				if(isset($resultTab['MsgErro'][0]))
+					$resultTab['MsgErro'] = $resultTab['MsgErro'][0];
+				if(isset($resultTab['Erro'][0]))
+					$resultTab['Erro'] = $resultTab['Erro'][0];
+
+				// Save results
+				if (_USE_CACHE_CORREIOS && isset($resultTab['Erro'])){
+					Db::getInstance()->autoExecute(_DB_PREFIX_.'correios_cache_test', array('hash' => pSQL(md5($this->getURL($wsParams))), 'result' => pSQL(json_encode($resultTab)), 'date_add' => pSQL(date('Y-m-d H:i:s')), 'date_upd' => pSQL(date('Y-m-d H:i:s'))), 'INSERT');
+				}
+
+				if (isset ($resultTab['Erro']) && $resultTab['Erro'] == '0'){
+					$this->_webserviceError = '';
+					return true;
+				}
+
+				if (isset($resultTab['MsgErro']))
+					$this->_webserviceError = $this->l('Error').' '.$resultTab['Erro'].' : '.$resultTab['MsgErro'];
+				else
+					$this->_webserviceError = $this->l('Correios Webservice seems to be down, please wait a few minutes and try again');
 			}
+		} else {
+			$this->_webserviceError = $this->l('Correios Webservice problem, Service empty');
 		}
 
 		return false;
@@ -842,8 +863,6 @@ public function getOrderShippingCost($params, $shipping_cost)
 			return array('connect' => false, 'cost' => 0);
 
 		// Sending Request
-		
-
 		$resultTab = $this->sendRequest($wsParams);
 		
 		// Check currency
@@ -859,11 +878,11 @@ public function getOrderShippingCost($params, $shipping_cost)
 			return array('connect' => true, 'cost' => $resultTab['Valor'] * $conversionRate);
 
 		if (isset($resultTab['Erro']) && $resultTab['Erro'] != '0')
-			$this->_webserviceError = $resultTab['Erro']['MsgErro'];
+			$this->_webserviceError = $resultTab['MsgErro'];
 		else
 			$this->_webserviceError = $this->l('Correios Webservice seems to be down, please wait a few minutes and try again');
 
-		return array('connect' => false, 'cost' => 0);
+		return array('connect' => false, 'cost' => true);
 	}
 
 	public function sendRequest($wsParams)
@@ -871,16 +890,26 @@ public function getOrderShippingCost($params, $shipping_cost)
 		// POST Request
 		$errno = $errstr = $result = '';
 		$url = $this->getURL($wsParams);
-    $xml = simplexml_load_file($url);
+    	$xml = simplexml_load_file($url);
 
-    if (!$xml)
-  	{
-	   	$this->_webserviceError = $this->l('Could not connect to correios.com.br');
+    	if (!$xml){
+	   		$this->_webserviceError = $this->l('Could not connect to correios.com.br');
 			return false;
 		}
 
 		// Parsing XML
 		$resultTab = $this->parseXML($xml);
+
+		if (isset ($resultTab['Erro']) && $resultTab['Erro'] != '0'){
+			$this->_webserviceError = $resultTab['MsgErro'];
+
+			Logger::addLog($url . ' => Erro ' . $this->_webserviceError, 3);
+
+			return false;
+		}
+
+		Logger::addLog($url . ' => Valor ' . $resultTab['Valor'], 1);
+		
 		return $resultTab;
 	}
 
